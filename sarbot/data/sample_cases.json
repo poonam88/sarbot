@@ -1,0 +1,41 @@
+[
+  {
+    "case_id": "CASE-2024-8841",
+    "customer_id": "CUST-MERIDIAN-001",
+    "customer_name": "Meridian Trading Ltd",
+    "alert_type": "structuring_pattern",
+    "summary": "High-risk structuring across UAE/NL/Cyprus",
+    "amount_gbp": 47840.0,
+    "jurisdictions": ["UAE", "NL", "Cyprus"],
+    "pattern": "structuring_pattern",
+    "risk_score": 86,
+    "recommendation": "SUBMIT SAR",
+    "red_flags": ["Structuring", "Multiple high-risk jurisdictions", "Missing invoices"]
+  },
+  {
+    "case_id": "CASE-2024-8839",
+    "customer_id": "CUST-OSEI-039",
+    "customer_name": "K. Osei-Mensah",
+    "alert_type": "structuring_pattern",
+    "summary": "Cash deposits below reporting threshold",
+    "amount_gbp": 14475.0,
+    "jurisdictions": ["UK"],
+    "pattern": "cash_deposit",
+    "risk_score": 64,
+    "recommendation": "ESCALATE",
+    "red_flags": ["Structuring", "Repeated cash deposits"]
+  },
+  {
+    "case_id": "CASE-2024-8835",
+    "customer_id": "CUST-BLUEWAVE-035",
+    "customer_name": "BlueWave Capital LP",
+    "alert_type": "wire_transfer",
+    "summary": "Lower-risk wire transfer case",
+    "amount_gbp": 125000.0,
+    "jurisdictions": ["US"],
+    "pattern": "wire_transfer",
+    "risk_score": 28,
+    "recommendation": "MONITOR",
+    "red_flags": ["Repeat wire amounts to same counterparty"]
+  }
+]
