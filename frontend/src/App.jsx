@@ -69,7 +69,7 @@ function App() {
     setResult(null);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/investigate", {
+      const response = await fetch("/api/investigate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -104,7 +104,7 @@ function App() {
     setError("");
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/cases/upload", {
+      const response = await fetch("/api/cases/upload", {
         method: "POST",
         body: formData,
       });
