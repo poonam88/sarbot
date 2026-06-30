@@ -1,0 +1,17 @@
+.env
+.env.local
+sarbot/.env
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+node_modules/
+frontend/dist/
+frontend/.vite/
+.vercel
+*.log
+uvicorn.out
+uvicorn.err
+.DS_Store
+Thumbs.db
