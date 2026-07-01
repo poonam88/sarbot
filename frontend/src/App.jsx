@@ -141,7 +141,7 @@ function App() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Financial Crime Copilot</p>
-          <h1>SARBot Investigation Desk</h1>
+          <div class="header-logo-wrap"><img src="/src/assets/sarbot.png" alt="SARBot logo" class="header-logo" /><h1>SARBot Investigation Desk</h1></div>
         </div>
         <span className="environment-pill">Demo</span>
       </header>
@@ -224,3 +224,4 @@ function App() {
 }
 
 export default App;
+
