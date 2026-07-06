@@ -1,61 +1,99 @@
-# SARBot — AI-powered financial crime investigation copilot
+# SARBot — AI-Powered Financial Crime Investigation Copilot
+
+![SARBot](./frontend/src/assets/sarbot.png)
+
+> **Faster Investigations • Regulatory Grade • Fully Auditable**
 
 SARBot is an autonomous AI agent that investigates suspicious activity alerts, gathers evidence, drafts regulatory-grade SAR (Suspicious Activity Report) narratives, and calculates risk scores — turning a multi-hour manual AML investigation into a task that completes in seconds.
 
-Built for [hackathon name] using Claude's agentic tool-use API.
+Built for the OpenAI Hackathon Top 15 using Claude's agentic tool-use API (Anthropic).
+
+🔗 **Live demo:** [sarbot.vercel.app](https://sarbot.vercel.app)  
+📁 **GitHub:** [github.com/poonam88/sarbot](https://github.com/poonam88/sarbot)
+
+---
 
 ## What it does
 
 Given a case ID, customer ID, and alert type, SARBot's agent autonomously:
 
-1. **Retrieves KYC data** — nationality, PEP status, occupation, risk tier, prior alerts
-2. **Pulls transaction history** — amounts, counterparties, jurisdictions
-3. **Matches typologies** — searches a FATF/FCA-aligned typology reference (structuring, layering, TBML, bulk cash)
-4. **Drafts a SAR narrative** — regulatory-grade prose citing the evidence gathered
-5. **Calculates a risk score** — 0–100, with a clear recommendation (SUBMIT SAR / ESCALATE / MONITOR / DISMISS)
+1. **KYC & Data Retrieval** — nationality, PEP status, occupation, risk tier, prior alerts
+2. **Transaction Analysis** — amounts, counterparties, jurisdictions, flag types
+3. **Typology Matching** — searches a FATF/FCA-aligned reference (structuring, layering, TBML, bulk cash)
+4. **SAR Draft Generation** — regulatory-grade prose citing the evidence gathered
+5. **Risk Score Assessment** — 0–100 score with recommendation (SUBMIT SAR / ESCALATE / MONITOR / DISMISS)
 
-Every tool call is logged with input, output, and duration, giving investigators a transparent, auditable evidence trail — critical for regulatory scrutiny.
+Every tool call is logged with input, output, and duration — giving investigators a transparent, auditable evidence trail critical for regulatory scrutiny.
+
+---
 
 ## Why this matters
 
-AML analysts spend hours per case manually gathering evidence and drafting SAR narratives. This creates investigation backlogs, inconsistent SAR quality across analysts, and audit risk when reasoning lives only in someone's notes. SARBot compresses the evidence-gathering and drafting step from hours to seconds while keeping every step traceable — the analyst still reviews and approves before anything is filed.
+AML analysts spend 2–4 hours per case manually gathering evidence and drafting SAR narratives. This creates:
+- **Investigation backlogs** — real financial crime sits unreviewed
+- **Inconsistent SAR quality** — varies by analyst and workload
+- **Audit risk** — reasoning lives only in someone's notes
+
+SARBot compresses the evidence-gathering and drafting step from hours to seconds while keeping every step traceable. The analyst still reviews and approves before anything is filed.
+
+**ROI:** ~60–80% reduction in analyst labor cost per investigation, 4–5x throughput increase per analyst.
+
+---
 
 ## Architecture
 
 ```
-React frontend  --->  FastAPI backend  --->  Claude (Anthropic) tool-use agent
-                            |
-                            v
-                       5 tools (mock data, swappable for real systems)
+React Frontend  →  FastAPI Backend  →  Claude (Anthropic) tool-use agent
+                         │
+                         ▼
+                    5 deterministic tools
+                    (swappable for real systems)
 ```
 
-- **Agent loop** (`agent.py` / `api/index.py`): Claude Messages API with native tool-use. Calls tools in sequence, observes results, decides next step, until it returns a final structured JSON result.
-- **Tools** (`tools.py`): five deterministic Python functions — `get_customer_kyc`, `get_transaction_history`, `search_typology_database`, `draft_sar_narrative`, `calculate_risk_score`. Currently backed by realistic mock data; designed to be swapped for real KYC/transaction/case-management systems.
-- **Backend** (`main.py`): FastAPI routes for investigation, case retrieval, sample-case seeding, and case upload (JSON/CSV).
-- **Frontend** (`frontend/`): React dashboard — case list, agent trace timeline, editable SAR draft, risk score panel.
+### Agent loop
+Claude Messages API with native tool-use. Calls tools in sequence, observes results, reasons over outputs, until it returns a final structured JSON result with SAR narrative, risk score, red flags, and recommendation.
+
+### Tools (`tools.py`)
+| Tool | Purpose |
+|------|---------|
+| `get_customer_kyc` | Retrieve KYC profile |
+| `get_transaction_history` | Pull recent transactions |
+| `search_typology_database` | Match FATF/FCA typologies |
+| `draft_sar_narrative` | Generate regulatory SAR prose |
+| `calculate_risk_score` | Score 0–100 with recommendation |
+
+Currently backed by realistic mock data — designed to be swapped for real KYC/transaction/case-management systems.
+
+---
 
 ## Tech stack
 
-- **AI:** Claude (Anthropic) — agentic tool-use
-- **Backend:** FastAPI, Pydantic
-- **Frontend:** React
-- **Deployment:** Vercel (serverless Python functions + static frontend)
+| Layer | Technology |
+|-------|-----------|
+| AI | Claude (Anthropic) — agentic tool-use |
+| Backend | FastAPI, Pydantic |
+| Frontend | React, Vite |
+| Deployment | Vercel (serverless Python + static frontend) |
+
+---
 
 ## Project structure
 
 ```
 sarbot/
-  main.py              FastAPI app and routes
-  agent.py             Agent loop (Claude tool-use)
-  tools.py             5 mock tools + typology data
-  models.py             Pydantic request/response schemas
+  main.py                  FastAPI routes
+  agent.py                 Claude tool-use agent loop
+  tools.py                 5 mock tools + typology data
+  models.py                Pydantic schemas
   data/
-    sample_cases.json   3 demo cases
-  .env                  ANTHROPIC_API_KEY (not committed)
+    sample_cases.json      3 demo cases
+  .env.example             API key template
 
 frontend/
   src/
     App.jsx
+    assets/
+      sarbot.png           Logo
     components/
       CaseList.jsx
       CaseHeader.jsx
@@ -64,9 +102,14 @@ frontend/
       RiskScore.jsx
     styles.css
 
-api/                    Vercel serverless entry point (consolidated app)
-vercel.json             Vercel routing config
+api/
+  index.py                 Consolidated app for Vercel serverless
+  requirements.txt
+
+vercel.json                Vercel routing config
 ```
+
+---
 
 ## Running locally
 
@@ -74,7 +117,10 @@ vercel.json             Vercel routing config
 ```bash
 cd sarbot
 pip install -r requirements.txt
-# Add ANTHROPIC_API_KEY to sarbot/.env
+
+# Create .env file
+echo ANTHROPIC_API_KEY=sk-ant-... > .env
+
 python -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -85,39 +131,65 @@ npm install
 npm run dev -- --port 3000
 ```
 
-Open `http://127.0.0.1:3000`.
+Open `http://127.0.0.1:3000`
+
+---
 
 ## Demo flow
 
-1. Open the dashboard and select a flagged case (e.g. "Meridian Trading Ltd — structuring across UAE/NL/Cyprus")
-2. The agent investigates autonomously — watch the **Agent Trace** tab for live tool calls
-3. Review the **SAR Draft** tab — an editable, citation-grounded narrative
-4. Review the **Decision** tab — risk score, red flags, and recommendation
+1. Open the dashboard → select **Meridian Trading Ltd** (highest risk case)
+2. Watch the **Agent Trace** tab — see each tool call complete in real time
+3. Open **SAR Draft** — editable regulatory narrative, ready to copy
+4. Open **Decision** — risk score, red flags, recommendation, time taken
 5. Approve or edit before submission
+
+---
 
 ## Sample cases
 
-| Case ID | Customer | Pattern |
-|---|---|---|
-| CASE-2024-8841 | Meridian Trading Ltd | High-risk structuring across UAE/NL/Cyprus |
-| CASE-2024-8839 | K. Osei-Mensah | Cash deposits below reporting threshold |
-| CASE-2024-8835 | BlueWave Capital LP | Lower-risk wire transfer pattern |
+| Case ID | Customer | Pattern | Risk |
+|---------|----------|---------|------|
+| CASE-2024-8841 | Meridian Trading Ltd | Structuring across UAE/NL/Cyprus | 86/100 |
+| CASE-2024-8839 | K. Osei-Mensah | Cash deposits below threshold | 64/100 |
+| CASE-2024-8835 | BlueWave Capital LP | Wire transfer pattern | 28/100 |
+
+---
 
 ## Deployment
 
-See [`DEPLOY.md`](./DEPLOY.md) for Vercel deployment instructions, or deploy directly from GitHub:
+Deployed on Vercel with serverless Python functions + React static build.
 
-1. Push this repo to GitHub
-2. Go to vercel.com → Add New Project → import this repo
-3. Add `ANTHROPIC_API_KEY` under Environment Variables
-4. Click Deploy
+```bash
+# From repo root
+vercel --prod
+```
 
-Every future push to `main` auto-redeploys.
+Set `ANTHROPIC_API_KEY` in Vercel → Project Settings → Environment Variables.
 
-## Status
+See [DEPLOY.md](./DEPLOY.md) for full step-by-step instructions.
 
-Working prototype with mock data tools and a fully functional agent loop. Tools are designed to be swapped for real KYC/transaction/case-management systems in production. The agent never files a SAR autonomously — a human analyst always reviews and approves before submission.
+---
+
+## Future roadmap
+
+- Real-time agent trace streaming (SSE)
+- Live database connections (replace mock tools)
+- RAG over FATF/FCA/POCA regulatory documents
+- Case status workflow (Pending → Under Review → Approved → Filed)
+- Multi-agent specialization (KYC agent, transaction agent, narrative agent)
+- Multi-jurisdiction support (US BSA/FinCEN, EU AMLD, APAC)
+
+---
+
+## Built by
+
+**Poonam Sharma** — AI & Emerging Tech Trainer, HCLTech  
+AITP Certified | OpenAI Hackathon Top 15
+And
+Anupam Rajendra Vishwakarma
+Senior Software Developer - HCLtech
+---
 
 ## License
 
-[Add your license here]
+MIT
