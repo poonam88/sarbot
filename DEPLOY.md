@@ -46,7 +46,7 @@ git push -u origin main
 2. Add New -> Project -> Import your repo
 3. Before deploying, expand Environment Variables and add:
    ```
-   ANTHROPIC_API_KEY = sk-ant-...
+   OPENAI_API_KEY = sk-...
    ```
 4. Click Deploy
 
