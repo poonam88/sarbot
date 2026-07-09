@@ -1,9 +1,6 @@
 """
-api/index.py — SARBot consolidated for Vercel serverless deployment.
-
-Vercel's Python runtime expects a single ASGI/WSGI app per function file.
-This file merges main.py + agent.py + tools.py + models.py into one module
-so it can be deployed as api/index.py with zero relative-import issues.
+api/index.py - SARBot consolidated for Vercel serverless deployment.
+OpenAI gpt-4o function-calling agentic loop.
 """
 
 import os
@@ -14,6 +11,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from openai import OpenAI
 
 # ---------------------------------------------------------------------------
 # Models
@@ -39,7 +37,7 @@ class CaseRecord(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Mock data (tools.py contents)
+# Mock data
 # ---------------------------------------------------------------------------
 MOCK_CUSTOMERS: dict[str, dict[str, Any]] = {
     "CUST-7781": {
@@ -70,16 +68,6 @@ MOCK_CUSTOMERS: dict[str, dict[str, Any]] = {
 }
 
 MOCK_TRANSACTIONS: dict[str, list[dict[str, Any]]] = {
-    "CUST-7781": [
-        {"tx_id": "TX-GB-9001", "date": "2026-06-20", "amount_gbp": 9850.0, "counterparty": "Northbridge Imports Ltd", "jurisdiction": "GB", "flag_type": "large_inbound", "invoice_on_file": True},
-        {"tx_id": "TX-GB-9002", "date": "2026-06-21", "amount_gbp": 9630.0, "counterparty": "Blue Harbor Trading FZE", "jurisdiction": "AE", "flag_type": "rapid_movement_of_funds", "invoice_on_file": False},
-        {"tx_id": "TX-GB-9003", "date": "2026-06-24", "amount_gbp": 7200.0, "counterparty": "Dover Freight Services", "jurisdiction": "GB", "flag_type": "trade_payment", "invoice_on_file": True},
-    ],
-    "CUST-3390": [
-        {"tx_id": "TX-GB-9101", "date": "2026-06-18", "amount_gbp": 7900.0, "counterparty": "Branch Cash Deposit", "jurisdiction": "GB", "flag_type": "cash_deposit", "invoice_on_file": False},
-        {"tx_id": "TX-GB-9102", "date": "2026-06-19", "amount_gbp": 7850.0, "counterparty": "Branch Cash Deposit", "jurisdiction": "GB", "flag_type": "structuring", "invoice_on_file": False},
-        {"tx_id": "TX-GB-9103", "date": "2026-06-21", "amount_gbp": 8100.0, "counterparty": "Branch Cash Deposit", "jurisdiction": "GB", "flag_type": "structuring", "invoice_on_file": False},
-    ],
     "CUST-MERIDIAN-001": [
         {"tx_id": "TX-MER-8841-01", "date": "2024-12-03", "amount_gbp": 9850.0, "counterparty": "Al Noor General Trading FZE", "jurisdiction": "UAE", "flag_type": "structuring", "invoice_on_file": False},
         {"tx_id": "TX-MER-8841-02", "date": "2024-12-04", "amount_gbp": 9975.0, "counterparty": "Rotterdam Commodities BV", "jurisdiction": "NL", "flag_type": "trade_payment", "invoice_on_file": True},
@@ -104,7 +92,7 @@ TYPOLOGIES = [
         "red_flags": ["Payments inconsistent with declared business activity", "Missing or weak invoice documentation", "Use of overseas trading counterparties without a clear relationship"],
     },
     {
-        "typology_name": "FCA \u00a72.4 structuring", "source": "Financial Conduct Authority",
+        "typology_name": "FCA §2.4 structuring", "source": "Financial Conduct Authority",
         "description": "Repeated transactions arranged to avoid scrutiny, internal thresholds, or expected monitoring triggers.",
         "red_flags": ["Multiple similar-value transactions over a short period", "Amounts clustered below review thresholds", "Activity inconsistent with expected customer profile"],
     },
@@ -129,14 +117,14 @@ def get_transaction_history(customer_id: str, days: int = 90) -> list[dict[str, 
 
 
 def search_typology_database(keywords: list[str]) -> list[dict[str, Any]]:
-    normalized_keywords = [k.lower() for k in keywords]
-    if not normalized_keywords:
+    normalized = [k.lower() for k in keywords]
+    if not normalized:
         return TYPOLOGIES
     matches = []
-    for typology in TYPOLOGIES:
-        searchable = " ".join([typology["typology_name"], typology["source"], typology["description"], " ".join(typology["red_flags"])]).lower()
-        if any(k in searchable for k in normalized_keywords):
-            matches.append(typology)
+    for t in TYPOLOGIES:
+        searchable = " ".join([t["typology_name"], t["source"], t["description"], " ".join(t["red_flags"])]).lower()
+        if any(k in searchable for k in normalized):
+            matches.append(t)
     return matches or TYPOLOGIES
 
 
@@ -149,17 +137,16 @@ def draft_sar_narrative(case_summary: dict[str, Any]) -> dict[str, Any]:
     tx_count = len(transactions)
     total_amount = sum(t.get("amount_gbp", 0) for t in transactions)
     typology_names = ", ".join(t.get("typology_name", "") for t in typologies if t.get("typology_name"))
-
     narrative_text = (
         f"This SAR relates to {name}, a customer rated {risk} risk. "
-        f"A total of {tx_count} transactions amounting to \u00a3{total_amount:,.2f} were reviewed. "
-        f"The activity displays characteristics consistent with the following typologies: {typology_names or 'unspecified patterns'}. "
+        f"A total of {tx_count} transactions amounting to £{total_amount:,.2f} were reviewed. "
+        f"The activity displays characteristics consistent with: {typology_names or 'unspecified patterns'}. "
         "Transactions lack supporting documentation and involve multiple high-risk jurisdictions, "
-        "which is inconsistent with the customer's declared business profile. "
+        "inconsistent with the customer's declared business profile. "
         "The financial crime team recommends escalation to the MLRO for SAR filing consideration "
         "under Part 7 of the Proceeds of Crime Act 2002."
     )
-    return {"narrative_text": narrative_text, "regulatory_basis": "UK Proceeds of Crime Act 2002; FCA financial crime systems and controls expectations", "word_count": len(narrative_text.split())}
+    return {"narrative_text": narrative_text, "regulatory_basis": "UK Proceeds of Crime Act 2002", "word_count": len(narrative_text.split())}
 
 
 def calculate_risk_score(factors: dict[str, Any]) -> dict[str, Any]:
@@ -169,28 +156,20 @@ def calculate_risk_score(factors: dict[str, Any]) -> dict[str, Any]:
     jurisdiction_count = int(factors.get("jurisdiction_count", 1) or 1)
     kyc_tier = str(factors.get("kyc_tier", "standard_due_diligence")).lower()
     prior_alerts = int(factors.get("prior_alerts", 0) or 0)
-
-    if velocity == "high":
-        score += 25
-    elif velocity == "medium":
-        score += 12
-    if structuring:
-        score += 25
+    if velocity == "high": score += 25
+    elif velocity == "medium": score += 12
+    if structuring: score += 25
     score += min(jurisdiction_count * 5, 15)
-    if "enhanced" in kyc_tier:
-        score += 10
-    elif "simplified" in kyc_tier:
-        score -= 5
+    if "enhanced" in kyc_tier: score += 10
+    elif "simplified" in kyc_tier: score -= 5
     score += min(prior_alerts * 6, 18)
     score = max(0, min(score, 100))
-
     if score >= 75:
         recommendation, escalation_target, confidence = "Escalate for MLRO review and consider SAR submission.", "MLRO", "high"
     elif score >= 50:
-        recommendation, escalation_target, confidence = "Escalate to financial crime investigations for enhanced review.", "Financial Crime Investigations", "medium"
+        recommendation, escalation_target, confidence = "Escalate to financial crime investigations.", "Financial Crime Investigations", "medium"
     else:
-        recommendation, escalation_target, confidence = "Document rationale and continue routine monitoring.", "Level 1 AML Operations", "medium"
-
+        recommendation, escalation_target, confidence = "Document and continue routine monitoring.", "Level 1 AML Operations", "medium"
     return {"score": score, "recommendation": recommendation, "confidence": confidence, "escalation_target": escalation_target, "estimated_hours_saved": 2.5}
 
 
@@ -202,20 +181,23 @@ TOOL_DISPATCH = {
     "calculate_risk_score": calculate_risk_score,
 }
 
+# ---------------------------------------------------------------------------
+# OpenAI tool definitions
+# ---------------------------------------------------------------------------
 TOOLS = [
-    {"name": "get_customer_kyc", "description": "Retrieve KYC profile for a customer.", "input_schema": {"type": "object", "properties": {"customer_id": {"type": "string"}}, "required": ["customer_id"]}},
-    {"name": "get_transaction_history", "description": "Retrieve transaction history for a customer.", "input_schema": {"type": "object", "properties": {"customer_id": {"type": "string"}, "days": {"type": "integer", "default": 90}}, "required": ["customer_id"]}},
-    {"name": "search_typology_database", "description": "Search FATF/FCA typology database by keyword.", "input_schema": {"type": "object", "properties": {"keywords": {"type": "array", "items": {"type": "string"}}}, "required": ["keywords"]}},
-    {"name": "draft_sar_narrative", "description": "Draft a SAR narrative from case summary.", "input_schema": {"type": "object", "properties": {"case_summary": {"type": "object", "properties": {"customer_info": {"type": "object"}, "transactions": {"type": "array", "items": {"type": "object"}}, "typologies": {"type": "array", "items": {"type": "object"}}}, "required": ["customer_info", "transactions", "typologies"]}}, "required": ["case_summary"]}},
-    {"name": "calculate_risk_score", "description": "Calculate AML risk score from factors.", "input_schema": {"type": "object", "properties": {"factors": {"type": "object", "properties": {"velocity": {"type": "string", "enum": ["low", "medium", "high"]}, "structuring": {"type": "boolean"}, "jurisdiction_count": {"type": "integer"}, "kyc_tier": {"type": "string"}, "prior_alerts": {"type": "integer"}}, "required": ["velocity", "structuring", "jurisdiction_count", "kyc_tier", "prior_alerts"]}}, "required": ["factors"]}},
+    {"type": "function", "function": {"name": "get_customer_kyc", "description": "Retrieve KYC profile for a customer.", "parameters": {"type": "object", "properties": {"customer_id": {"type": "string"}}, "required": ["customer_id"]}}},
+    {"type": "function", "function": {"name": "get_transaction_history", "description": "Retrieve transaction history.", "parameters": {"type": "object", "properties": {"customer_id": {"type": "string"}, "days": {"type": "integer"}}, "required": ["customer_id"]}}},
+    {"type": "function", "function": {"name": "search_typology_database", "description": "Search FATF/FCA typology database.", "parameters": {"type": "object", "properties": {"keywords": {"type": "array", "items": {"type": "string"}}}, "required": ["keywords"]}}},
+    {"type": "function", "function": {"name": "draft_sar_narrative", "description": "Draft a SAR narrative from case summary.", "parameters": {"type": "object", "properties": {"case_summary": {"type": "object", "properties": {"customer_info": {"type": "object"}, "transactions": {"type": "array", "items": {"type": "object"}}, "typologies": {"type": "array", "items": {"type": "object"}}}, "required": ["customer_info", "transactions", "typologies"]}}, "required": ["case_summary"]}}},
+    {"type": "function", "function": {"name": "calculate_risk_score", "description": "Calculate AML risk score.", "parameters": {"type": "object", "properties": {"factors": {"type": "object", "properties": {"velocity": {"type": "string", "enum": ["low", "medium", "high"]}, "structuring": {"type": "boolean"}, "jurisdiction_count": {"type": "integer"}, "kyc_tier": {"type": "string"}, "prior_alerts": {"type": "integer"}}, "required": ["velocity", "structuring", "jurisdiction_count", "kyc_tier", "prior_alerts"]}}, "required": ["factors"]}}},
 ]
 
-SYSTEM_PROMPT = """You are SARBot, an expert AML/financial crime investigation agent working for a regulated UK financial institution.
+SYSTEM_PROMPT = """You are SARBot, an expert AML/financial crime investigation agent.
 
 Call tools in this order:
 1. get_customer_kyc
 2. get_transaction_history
-3. search_typology_database (keywords derived from alert_type)
+3. search_typology_database (keywords from alert_type)
 4. draft_sar_narrative (case_summary: customer_info, transactions, typologies)
 5. calculate_risk_score (factors: velocity, structuring, jurisdiction_count, kyc_tier, prior_alerts)
 
@@ -232,36 +214,41 @@ Then return ONLY valid JSON (no markdown):
 def run_investigation(case_id: str, customer_id: str, alert_type: str) -> dict:
     start_time = time.time()
     tool_call_log: list = []
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("OPENAI_API_KEY")
 
     if api_key:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-        messages = [{"role": "user", "content": (
-            f"Investigate the following alert:\n\nCase ID: {case_id}\nCustomer ID: {customer_id}\n"
-            f"Alert type: {alert_type}\n\nUse all available tools, then return your final JSON result."
-        )}]
-        response = None
-        for _ in range(8):  # safety cap on loop iterations for serverless time limits
-            response = client.messages.create(model="claude-sonnet-4-6", max_tokens=4096, system=SYSTEM_PROMPT, tools=TOOLS, messages=messages)
-            messages.append({"role": "assistant", "content": response.content})
-            if response.stop_reason != "tool_use":
+        openai_client = OpenAI(api_key=api_key)
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": (
+                f"Investigate:\nCase ID: {case_id}\nCustomer ID: {customer_id}\n"
+                f"Alert type: {alert_type}\n\nUse all tools then return final JSON."
+            )},
+        ]
+
+        for _ in range(10):
+            response = openai_client.chat.completions.create(
+                model="gpt-4o", messages=messages, tools=TOOLS, tool_choice="auto"
+            )
+            message = response.choices[0].message
+            messages.append(message)
+
+            if not message.tool_calls:
                 break
-            tool_results = []
-            for block in response.content:
-                if block.type != "tool_use":
-                    continue
-                fn = TOOL_DISPATCH.get(block.name)
+
+            for tool_call in message.tool_calls:
+                tool_name = tool_call.function.name
+                tool_input = json.loads(tool_call.function.arguments)
+                fn = TOOL_DISPATCH.get(tool_name)
                 t0 = time.time()
                 try:
-                    output = fn(**block.input) if fn else {"error": f"Unknown tool: {block.name}"}
+                    output = fn(**tool_input) if fn else {"error": f"Unknown tool: {tool_name}"}
                 except Exception as e:
                     output = {"error": str(e)}
-                tool_call_log.append({"name": block.name, "input": block.input, "output": output, "duration": round(time.time() - t0, 3)})
-                tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": json.dumps(output)})
-            messages.append({"role": "user", "content": tool_results})
+                tool_call_log.append({"name": tool_name, "input": tool_input, "output": output, "duration": round(time.time() - t0, 3)})
+                messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": json.dumps(output)})
 
-        final_text = "".join(getattr(b, "text", "") for b in (response.content if response else []))
+        final_text = message.content or ""
         try:
             clean = final_text.strip()
             if clean.startswith("```"):
@@ -270,12 +257,13 @@ def run_investigation(case_id: str, customer_id: str, alert_type: str) -> dict:
                     clean = clean[4:]
             result = json.loads(clean.strip())
         except Exception:
-            result = {"sar_narrative": final_text or "Agent did not produce a narrative.", "risk_score": 0, "recommendation": "ESCALATE", "red_flags": ["Agent response parsing failed"], "summary": "Parsing failed."}
+            result = {"sar_narrative": final_text or "Agent did not produce a narrative.", "risk_score": 0, "recommendation": "ESCALATE", "red_flags": ["Parsing failed"], "summary": "Parsing failed."}
+
         result["tool_call_log"] = tool_call_log
         result["total_time_seconds"] = round(time.time() - start_time, 2)
         return result
 
-    # Demo-mode fallback (no API key) — deterministic, no LLM reasoning
+    # Demo mode fallback
     def log_tool(name, input_, fn, **kwargs):
         t0 = time.time()
         try:
@@ -303,9 +291,9 @@ def run_investigation(case_id: str, customer_id: str, alert_type: str) -> dict:
     red_flags = []
     for t in txns:
         if t.get("flag_type") == "structuring":
-            red_flags.append(f"Structuring: \u00a3{t['amount_gbp']:,.0f} to {t['counterparty']} ({t['jurisdiction']})")
+            red_flags.append(f"Structuring: £{t['amount_gbp']:,.0f} to {t['counterparty']} ({t['jurisdiction']})")
         elif not t.get("invoice_on_file"):
-            red_flags.append(f"Missing invoice: \u00a3{t['amount_gbp']:,.0f} \u2014 {t['counterparty']}")
+            red_flags.append(f"Missing invoice: £{t['amount_gbp']:,.0f} — {t['counterparty']}")
     if kyc.get("pep_flag"):
         red_flags.append("Customer is a Politically Exposed Person (PEP)")
     if len(jurisdictions) > 2:
@@ -314,10 +302,8 @@ def run_investigation(case_id: str, customer_id: str, alert_type: str) -> dict:
 
     return {
         "sar_narrative": sar_result.get("narrative_text", ""),
-        "risk_score": risk_score,
-        "recommendation": recommendation,
-        "red_flags": red_flags,
-        "summary": f"{kyc.get('name', customer_id)} \u2014 risk score {risk_score}/100. {len(txns)} transactions reviewed across {len(jurisdictions)} jurisdiction(s). Recommendation: {recommendation}.",
+        "risk_score": risk_score, "recommendation": recommendation, "red_flags": red_flags,
+        "summary": f"{kyc.get('name', customer_id)} — risk score {risk_score}/100. {len(txns)} transactions across {len(jurisdictions)} jurisdiction(s). Recommendation: {recommendation}.",
         "tool_call_log": tool_call_log,
         "total_time_seconds": round(time.time() - start_time, 2),
     }
@@ -332,7 +318,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 CASE_RESULTS: dict[str, CaseRecord] = {}
 
 SAMPLE_CASES = [
-    {"case_id": "CASE-2024-8841", "customer_id": "CUST-MERIDIAN-001", "customer_name": "Meridian Trading Ltd", "alert_type": "structuring_pattern", "summary": "High-risk structuring across UAE/NL/Cyprus", "risk_score": 86, "recommendation": "SUBMIT SAR", "red_flags": ["Structuring", "Multiple high-risk jurisdictions"]},
+    {"case_id": "CASE-2024-8841", "customer_id": "CUST-MERIDIAN-001", "customer_name": "Meridian Trading Ltd", "alert_type": "structuring_pattern", "summary": "High-risk structuring across UAE/NL/Cyprus", "risk_score": 86, "recommendation": "SUBMIT SAR", "red_flags": ["Structuring", "Multiple high-risk jurisdictions", "Missing invoices"]},
     {"case_id": "CASE-2024-8839", "customer_id": "CUST-OSEI-039", "customer_name": "K. Osei-Mensah", "alert_type": "structuring_pattern", "summary": "Cash deposits below threshold", "risk_score": 64, "recommendation": "ESCALATE", "red_flags": ["Structuring", "Cash deposits"]},
     {"case_id": "CASE-2024-8835", "customer_id": "CUST-BLUEWAVE-035", "customer_name": "BlueWave Capital LP", "alert_type": "wire_transfer", "summary": "Lower-risk wire transfer case", "risk_score": 28, "recommendation": "MONITOR", "red_flags": ["Repeat wire amounts"]},
 ]
@@ -341,7 +327,7 @@ SAMPLE_CASES = [
 @app.get("/api")
 @app.get("/api/")
 def root() -> dict[str, Any]:
-    return {"service": "SARBot API", "status": "ok", "docs": "/api/docs"}
+    return {"service": "SARBot API", "status": "ok", "model": "gpt-4o"}
 
 
 @app.get("/api/health")
@@ -362,11 +348,7 @@ def seed_cases() -> dict[str, Any]:
     CASE_RESULTS.clear()
     for sample in SAMPLE_CASES:
         request = InvestigationRequest(case_id=sample["case_id"], customer_id=sample["customer_id"], alert_type=sample["alert_type"])
-        result = InvestigationResult(
-            sar_narrative=f"Seeded demo case for {sample['customer_name']}: {sample['summary']}",
-            risk_score=sample["risk_score"], recommendation=sample["recommendation"],
-            red_flags=sample["red_flags"], tool_call_log=[], total_time_seconds=0.0,
-        )
+        result = InvestigationResult(sar_narrative=f"Seeded: {sample['summary']}", risk_score=sample["risk_score"], recommendation=sample["recommendation"], red_flags=sample["red_flags"], tool_call_log=[], total_time_seconds=0.0)
         CASE_RESULTS[request.case_id] = CaseRecord(request=request, result=result)
     return {"seeded": len(CASE_RESULTS), "case_ids": list(CASE_RESULTS.keys())}
 
