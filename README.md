@@ -6,7 +6,7 @@
 
 SARBot is an autonomous AI agent that investigates suspicious activity alerts, gathers evidence, drafts regulatory-grade SAR (Suspicious Activity Report) narratives, and calculates risk scores — turning a multi-hour manual AML investigation into a task that completes in seconds.
 
-Built for the OpenAI Hackathon Top 15 using Claude's agentic tool-use API (Anthropic).
+Built for the HCLTech × OpenAI Hackathon using **OpenAI gpt-4o** and **Codex**.
 
 🔗 **Live demo:** [sarbot.vercel.app](https://sarbot.vercel.app)  
 📁 **GitHub:** [github.com/poonam88/sarbot](https://github.com/poonam88/sarbot)
@@ -43,7 +43,7 @@ SARBot compresses the evidence-gathering and drafting step from hours to seconds
 ## Architecture
 
 ```
-React Frontend  →  FastAPI Backend  →  Claude (Anthropic) tool-use agent
+React Frontend  →  FastAPI Backend  →  OpenAI gpt-4o function-calling agent
                          │
                          ▼
                     5 deterministic tools
@@ -51,7 +51,7 @@ React Frontend  →  FastAPI Backend  →  Claude (Anthropic) tool-use agent
 ```
 
 ### Agent loop
-Claude Messages API with native tool-use. Calls tools in sequence, observes results, reasons over outputs, until it returns a final structured JSON result with SAR narrative, risk score, red flags, and recommendation.
+OpenAI gpt-4o with native function calling. Calls tools in sequence, observes results, reasons over outputs, until it returns a final structured JSON result with SAR narrative, risk score, red flags, and recommendation.
 
 ### Tools (`tools.py`)
 | Tool | Purpose |
@@ -70,7 +70,8 @@ Currently backed by realistic mock data — designed to be swapped for real KYC/
 
 | Layer | Technology |
 |-------|-----------|
-| AI | Claude (Anthropic) — agentic tool-use |
+| AI Model | OpenAI gpt-4o — agentic function calling |
+| AI IDE | OpenAI Codex — used to build and scaffold the project |
 | Backend | FastAPI, Pydantic |
 | Frontend | React, Vite |
 | Deployment | Vercel (serverless Python + static frontend) |
@@ -82,7 +83,7 @@ Currently backed by realistic mock data — designed to be swapped for real KYC/
 ```
 sarbot/
   main.py                  FastAPI routes
-  agent.py                 Claude tool-use agent loop
+  agent.py                 OpenAI gpt-4o agent loop
   tools.py                 5 mock tools + typology data
   models.py                Pydantic schemas
   data/
@@ -119,7 +120,7 @@ cd sarbot
 pip install -r requirements.txt
 
 # Create .env file
-echo ANTHROPIC_API_KEY=sk-ant-... > .env
+echo OPENAI_API_KEY=sk-... > .env
 
 python -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
@@ -149,7 +150,7 @@ Open `http://127.0.0.1:3000`
 
 | Case ID | Customer | Pattern | Risk |
 |---------|----------|---------|------|
-| CASE-2024-8841 | Meridian Trading Ltd | Structuring across UAE/NL/Cyprus | 86/100 |
+| CASE-2024-8841 | Meridian Trading Ltd | Structuring across UAE/NL/Cyprus | 100/100 |
 | CASE-2024-8839 | K. Osei-Mensah | Cash deposits below threshold | 64/100 |
 | CASE-2024-8835 | BlueWave Capital LP | Wire transfer pattern | 28/100 |
 
@@ -160,11 +161,10 @@ Open `http://127.0.0.1:3000`
 Deployed on Vercel with serverless Python functions + React static build.
 
 ```bash
-# From repo root
 vercel --prod
 ```
 
-Set `ANTHROPIC_API_KEY` in Vercel → Project Settings → Environment Variables.
+Set `OPENAI_API_KEY` in Vercel → Project Settings → Environment Variables.
 
 See [DEPLOY.md](./DEPLOY.md) for full step-by-step instructions.
 
@@ -183,11 +183,11 @@ See [DEPLOY.md](./DEPLOY.md) for full step-by-step instructions.
 
 ## Built by
 
-**Poonam Sharma** — AI & Emerging Tech Trainer, HCLTech  
-AITP Certified | OpenAI Hackathon Top 15
+**Poonam Sharma** — AI & Emerging Technology Trainer, HCLTech  
+AITP Certified | HCLTech × OpenAI Hackathon Top 15
 And
-Anupam Rajendra Vishwakarma
-Senior Software Developer - HCLtech
+**Anupam Rajendra Vishwakarma** -- Senior Software Developer, GM1 CU-Modern Apps-MA-Full Stack
+
 ---
 
 ## License
