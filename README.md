@@ -185,7 +185,9 @@ See [DEPLOY.md](./DEPLOY.md) for full step-by-step instructions.
 
 **Poonam Sharma** — AI & Emerging Technology Trainer, HCLTech  
 AITP Certified | HCLTech × OpenAI Hackathon Top 15
+
 And
+
 **Anupam Rajendra Vishwakarma** -- Senior Software Developer, GM1 CU-Modern Apps-MA-Full Stack
 
 ---
